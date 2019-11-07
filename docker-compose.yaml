@@ -1,0 +1,65 @@
+version: '3.7'
+
+networks:
+  ingress:
+    external: true
+  backend:
+    external: false
+
+volumes:
+  wp-data:
+  wp-db:
+
+services:
+  wp:
+    image: wordpress:5.2.3-php7.2-fpm-alpine
+    labels:
+      - org_label_schema.group=monitoring
+    user: www-data:www-data
+    restart: unless-stopped
+    environment:
+      WORDPRESS_DB_HOST: wp-db:3306
+      WORDPRESS_DB_USER: wpUser
+      WORDPRESS_DB_PASSWORD: securePassword
+      WORDPRESS_DB_NAME: wordpressApp
+    volumes:
+      - wp-data:/var/www/html:rw
+    depends_on:
+      - wp-db
+    networks:
+      - backend
+  wp-db:
+    image: mysql:8.0.18
+    labels:
+      - org_label_schema.group=monitoring
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_DATABASE: wordpressApp
+      MYSQL_USER: wpUser
+      MYSQL_PASSWORD: securePassword
+      MYSQL_ROOT_PASSWORD: 'securePasswordRoot' 
+    volumes:
+      - wp-db:/var/lib/mysql
+    networks: 
+      - backend
+  web:
+    build: ./nginx
+    labels:
+      - traefik.docker.network=ingress
+      - traefik.enable=true
+      - traefik.frontend.rule=Host:wp.hola.com
+      - traefik.port=80
+      - traefik.backend=wp
+      - org_label_schema.group=monitoring
+    restart: unless-stopped
+    expose:
+      - "80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - wp-data:/var/www/html:rw
+    depends_on:
+      - wp
+    networks: 
+      - ingress
+      - backend
